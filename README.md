@@ -1,0 +1,101 @@
+# EuroCaps — Activity Based Costing Pipeline
+
+## Projectoverzicht
+
+Dit project verwerkt ruwe scanbewegingen uit het EuroCaps warehouse tot een Activity Based Costing model in Power BI. De Python scripts produceren een Excel workbook (`warehouse_model.xlsx`) die als databron dient voor het Power BI rapport "EuroCaps - ABC".
+
+Twee kernmetingen:
+
+1. **Picktijd per pallet** — hoe lang duurt één palletverplaatsing, per activiteit?
+2. **Opslagduur per pallet** — hoe lang staat een pallet in de stelling?
+
+---
+
+## Mappenstructuur
+
+```
+data/
+  bronze/   → Ruwe input (scanbewegingen Excel, product_groups.xlsx)
+  silver/   → Tussenresultaten voor QA (optioneel)
+  gold/     → Definitieve output voor Power BI (warehouse_model.xlsx)
+src/        → Hulpscripts (analyse, checks)
+```
+
+---
+
+## Python bestanden
+
+### `warehouse-model.py` (Hoofdscript)
+
+De kern van het project. Verwerkt ruwe scanbewegingen tot het volledige datamodel voor Power BI. Produceert `warehouse_model.xlsx` met 6 tabs: `storage_days`, `batches`, `batch_pallets`, `activity_segments`, `activity_segments_qa`, `kosten_parameters`.
+
+Gebruik: draai dit script opnieuw als je een nieuw bronbestand hebt, parameters wilt aanpassen, of kostenparameters wilt wijzigen. Refresh daarna Power BI.
+
+| | |
+|---|---|
+| **Input** | `data/bronze/Copy of Scanbewegingen *.xlsx`, `data/bronze/product_groups.xlsx` |
+| **Output** | `data/gold/warehouse_model.xlsx` |
+
+### `src/werktijd.py` (Hulpscript)
+
+Schat totale "ingeklokte" uren per warehouse-medewerker op basis van eerste en laatste scan per shift. Gebruikt om de discrepantie te analyseren tussen directe werktijd (uit batches, ~85–100u) en totale aanwezige tijd (~200–225u). Het verschil is indirecte tijd (looptijd, pauze, wachttijd).
+
+Gebruik: draai los voor een quick check op shift-uren. Niet nodig voor de Power BI output.
+
+| | |
+|---|---|
+| **Input** | `data/bronze/Copy of Scanbewegingen *.xlsx` |
+| **Output** | Alleen console output |
+
+### `src/product-group.py` (Hulpscript)
+
+Extraheert alle unieke productomschrijvingen uit de scanbewegingen en telt hoeveel unieke pallets er per product zijn. De output dient als basis die je naar de klant stuurt om ProductGroup en Bedrijf bij te laten vullen. Die ingevulde mapping (`product_groups.xlsx`) wordt vervolgens door `warehouse-model.py` ingelezen.
+
+Gebruik: draai eenmalig bij een nieuw bronbestand om de mapping-basis te genereren. Stuur de output naar de klant.
+
+| | |
+|---|---|
+| **Input** | `data/bronze/Copy of Scanbewegingen *.xlsx` |
+| **Output** | `data/gold/product_groups.xlsx` |
+
+> **Opmerking:** `product_groups.xlsx` staat ook in `bronze/` — deze is al eerder met de klant gedeeld en deels ingevuld, dus van een aantal producten is deze data al bekend.
+
+### `src/opslagbezetting.py` (Hulpscript)
+
+Reconstructeert per dag de bezetting per hal: hoeveel pallets staan waar. Nuttig voor capaciteitsplanning en validatie. Produceert een chart + tabel met piekbezetting per hal.
+
+Gebruik: draai los als je bezettingspatronen wilt analyseren. Wordt betrouwbaarder met langere datasets (jaar > week).
+
+| | |
+|---|---|
+| **Input** | `data/bronze/Copy of Scanbewegingen *.xlsx` |
+| **Output** | `data/bezetting_historisch.png` + console output |
+
+### Gap-analyse script (Hulpscript)
+
+Er bestond ook een gap-analyse script (`src/test.py` of `gap_analyse.py`) dat een histogram maakt van tijdsgaps tussen scans. Dit is gebruikt om de drempelwaarden te bepalen voor `CHAIN_MAX_IDLE_SEC` (25 min), `MACRO_PAUSE_SPLIT_SEC` (25 min) en `IDLE_GAP_THRESHOLD_SEC` (30 min). Hoeft niet opnieuw gedraaid te worden tenzij de drempels heroverwogen moeten worden met nieuwe data.
+
+---
+
+## Power BI
+
+Het Power BI rapport "EuroCaps - ABC" leest `warehouse_model.xlsx` in met de volgende relaties:
+
+- `batches[BatchId]` (1) → `batch_pallets[BatchId]` (*)
+- `storage_days[Dragernr.]` (1) ↔ `batch_pallets[Dragernr.]` (*) — **bidirectioneel**
+- `batches[BatchId]` (1) → `activity_segments[BatchId]` (*)
+- `DimDate[Date]` (1) → `batches[BatchDate]` (*)
+
+Slicers voor ProductGroup en Bedrijf komen uit `batch_pallets`. Kostenparameters worden gelezen via `LOOKUPVALUE()` uit `kosten_parameters`.
+
+Zie de docstring bovenaan `warehouse-model.py` voor meer detail over de pipeline logica, business rules en aannames.
+
+---
+
+## Openstaande items
+
+- Echte klokdata van klant (in- en uitkloktijden) voor betere shift-uren
+- Bevestiging uurtarief en aantal EPTs/reachtrucks
+- Bevestiging stellingkosten (per maand of per jaar?)
+- Historische data (heel 2025) voor betrouwbaardere analyses
+- Locatie/zone analyse (plattegrond + locatiemapping beschikbaar)
