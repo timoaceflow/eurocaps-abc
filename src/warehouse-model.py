@@ -51,11 +51,14 @@ Auteur: Kars @ Aceflow
 ===================================================================================
 """
 
+import os
 from pathlib import Path
 import pandas as pd
 import numpy as np
 import re
 import hashlib
+from dotenv import load_dotenv
+load_dotenv()
 
 # ===================================================================================
 # PADEN — Pas INPUT_XLSX aan als je een ander bronbestand wilt gebruiken.
@@ -64,18 +67,18 @@ import hashlib
 #   silver = tussenresultaten (optioneel, voor QA)
 #   gold   = definitieve output voor Power BI
 # ===================================================================================
-BASE_DIR   = Path("/Users/kars/Projects/activitybasedcosting")
-BRONZE_DIR = BASE_DIR / "data" / "bronze"
-SILVER_DIR = BASE_DIR / "data" / "silver"
-GOLD_DIR   = BASE_DIR / "data" / "gold"
+# BRONZE_DIR = Path(os.environ["BRONZE_DIR"])
+# SILVER_DIR = Path(os.environ["SILVER_DIR"])
+# GOLD_DIR = Path(os.environ["GOLD_DIR"])
 
-INPUT_XLSX          = BRONZE_DIR / "Copy of Scanbewegingen 11-01 tm 18-01.xlsx"
-PRODUCT_GROUPS_XLSX = BRONZE_DIR / "product_groups.xlsx"  # Mapping: Omschrijving → ProductGroup + Bedrijf
-OUTPUT_XLSX         = GOLD_DIR   / "warehouse_model.xlsx"
+SHAREPOINT_LOC      = Path(os.environ["SHAREPOINT_LOC"])
+INPUT_XLSX          = SHAREPOINT_LOC / Path(os.environ["INPUT_FILE"])
+PRODUCT_GROUPS_XLSX = SHAREPOINT_LOC / Path(os.environ["PRODUCT_GROUPS_FILE"])  # Mapping: Omschrijving → ProductGroup + Bedrijf
+OUTPUT_XLSX         = SHAREPOINT_LOC   / Path(os.environ["OUTPUT_FILE"])
 
 # Optioneel: exporteer silver-events voor handmatige QA/debugging
 SAVE_SILVER_EVENTS  = False
-SILVER_EVENTS_XLSX  = SILVER_DIR / "silver_storage_events.xlsx"
+SILVER_EVENTS_XLSX  = SHAREPOINT_LOC / "silver_storage_events.xlsx"
 SILVER_EVENTS_SHEET = "silver_storage"
 
 # Sheet-namen in de output Excel
@@ -865,8 +868,8 @@ def build_activity_segments(batches_out: pd.DataFrame,
 # ===================================================================================
 
 def main():
-    SILVER_DIR.mkdir(parents=True, exist_ok=True)
-    GOLD_DIR.mkdir(parents=True, exist_ok=True)
+    # SILVER_DIR.mkdir(parents=True, exist_ok=True)
+    # GOLD_DIR.mkdir(parents=True, exist_ok=True)
     print(f"Start warehouse-model … {PIPELINE_VERSION}")
     print(f"📥 Bronze: {INPUT_XLSX}")
 
@@ -1088,7 +1091,8 @@ def main():
     # =====================================================================
     # STAP 8: Export naar Excel
     # =====================================================================
-    GOLD_DIR.mkdir(parents=True, exist_ok=True)
+    # GOLD_DIR.mkdir(parents=True, exist_ok=True)
+    # OUTPUT_LOC = SHAREPOINT_LOC / OUTPUT_XLSX
     with pd.ExcelWriter(OUTPUT_XLSX, engine="openpyxl", mode="w") as xw:
         storage_days.to_excel(xw, index=False, sheet_name=SHEET_STORAGE_DAYS)
         batches_out.to_excel(xw, index=False, sheet_name=SHEET_BATCHES)
